@@ -3,6 +3,7 @@ import logging
 
 import toml
 import torch
+import numpy as np
 
 from .errors import TomlError
 from .molecule import Molecule
@@ -11,6 +12,8 @@ from .wf import ANSATZES
 log = logging.getLogger(__name__)
 
 __all__ = ()
+
+angstrom = 1 / 0.52917721092
 
 
 def validate_params(params):
@@ -29,6 +32,19 @@ def import_fullname(fullname):
     module_name, qualname = fullname.split(':')
     module = importlib.import_module(module_name)
     return getattr(module, qualname)
+
+
+def molecules_from_file(workdir):
+    if (workdir / 'molecules.toml').is_file():
+        molecules = {}
+        for name, params in toml.loads(
+            (workdir / 'molecules.toml').read_text()
+        ).items():
+            coords = np.array(params.pop('coords'), dtype=np.float32) * angstrom
+            molecules[name] = Molecule(coords, **params)
+        return molecules
+    else:
+        return None
 
 
 def wf_from_file(workdir):
