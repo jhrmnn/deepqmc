@@ -59,6 +59,8 @@ def sample_wf(  # noqa: C901
     calculating_energy = not equilibrate
     buffer = []
     energy = None
+    mol = sampler.mol
+    sampler = sampler.iter_with_info()
     for step, (rs, log_psis, _, info) in zip(steps, sampler):
         if step == 0:
             dist_means = rs.new_zeros(5 * block_size)
@@ -76,7 +78,7 @@ def sample_wf(  # noqa: C901
             if calculating_energy:
                 yield step, 'eq'
         if calculating_energy:
-            Es_loc = local_energy(rs, wf, keep_graph=False)[0]
+            Es_loc = local_energy(rs, wf, mol, keep_graph=False)[0]
             buffer.append(Es_loc)
             if log_dict is not None:
                 log_dict['coords'] = rs.cpu().numpy()
@@ -184,6 +186,7 @@ class MetropolisSampler(Sampler):
         self,
         wf,
         rs,
+        mol=None,
         writer=None,
         *,
         tau=0.1,
@@ -196,6 +199,7 @@ class MetropolisSampler(Sampler):
     ):
         super().__init__()
         self.wf = wf
+        self.mol = mol or wf.mol
         self.max_age = max_age
         self.n_first_certain = n_first_certain
         self.log_psi_threshold = log_psi_threshold
@@ -233,7 +237,7 @@ class MetropolisSampler(Sampler):
 
     def acceptance_prob(self, rs):
         with torch.no_grad:
-            log_psis, sign_psis = self.wf(rs)
+            log_psis, sign_psis = self.wf(rs, self.mol.coords)
         Ps_acc = torch.exp(2 * (log_psis - self.log_psis))
         # Ps_acc might become 0 or inf, however this does not affect
         # the stability of the remaining code
@@ -255,7 +259,7 @@ class MetropolisSampler(Sampler):
         )
 
     @classmethod
-    def from_wf(cls, wf, *, sample_size=2_000, **kwargs):
+    def from_wf(cls, wf, *, mol=None, sample_size=2_000, **kwargs):
         """Initialize a sampler with random initial walker positions.
 
         The walker positions are sampled from Gaussians centered on atoms, with
@@ -267,8 +271,9 @@ class MetropolisSampler(Sampler):
             sample_size (int): number of Markov-chain walkers
             kwargs: all other arguments are passed to the constructor
         """
-        rs = rand_from_mol(wf.mol, sample_size, wf.pop_charges())
-        return cls(wf, rs, **kwargs)
+        mol = mol or wf.mol
+        rs = rand_from_mol(mol, sample_size, wf.pop_charges())
+        return cls(wf, rs, mol=mol, **kwargs)
 
     def step(self):
         rs = self.proposal()
@@ -353,7 +358,7 @@ class MetropolisSampler(Sampler):
             self.restart()
 
     def recompute_psi(self):
-        self.state['log_psis'], self.state['sign_psis'] = self.wf(self.rs)
+        self.state['log_psis'], self.state['sign_psis'] = self.wf(self.rs, self.mol)
 
     def restart(self):
         self.state['step'] = 0
@@ -420,11 +425,11 @@ class LangevinSampler(MetropolisSampler):
 
     def qforce(self, rs):
         try:
-            forces, (log_psis, sign_psis) = quantum_force(rs, self.wf)
+            forces, (log_psis, sign_psis) = quantum_force(rs, self.wf, self.mol.coords)
         except LUFactError as e:
             e.info['rs'] = rs[e.info['idxs']]
             raise
-        forces = clean_force(forces, rs, self.wf.mol, tau=self.tau)
+        forces = clean_force(forces, rs, self.mol, tau=self.tau)
         return forces, (log_psis, sign_psis)
 
     def extra_vars(self):
