@@ -11,7 +11,7 @@ from tqdm import tqdm
 from .errors import TrainingCrash
 from .evaluate import evaluate
 from .fit import fit_wf
-from .io import wf_from_file
+from .io import molecules_from_file, wf_from_file
 from .sampling import LangevinSampler, sample_wf
 from .train import train
 from .wf import ANSATZES
@@ -181,13 +181,16 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
         log.info('Initializing a new wave function')
         wf, params, state_from_file = wf_from_file(workdir)
         state = state or state_from_file
+        molecules = molecules_from_file(workdir)
         if cuda:
             log.info('Moving to GPU...')
             wf.cuda()
+            molecules = {n: m.cuda() for n, m in molecules.items()}
             log.info('Moved to GPU')
         try:
             train(
                 wf,
+                molecules=molecules,
                 workdir=workdir,
                 state=state,
                 save_every=save_every,
@@ -236,12 +239,15 @@ def evaluate_at(workdir, cuda, store_steps, hook):
         sys.path.append(str(workdir))
         import dlqmc_hook  # noqa: F401
     wf, params, state = wf_from_file(workdir)
+    molecules = molecules_from_file(workdir)
     if state:
         wf.load_state_dict(state['wf'])
     if cuda:
         wf.cuda()
+        molecules = {n: m.cuda() for n, m in molecules.items()}
     evaluate(
         wf,
+        molecules=molecules,
         store_steps=store_steps,
         workdir=workdir,
         **params.get('evaluate_kwargs', {}),
