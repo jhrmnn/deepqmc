@@ -49,6 +49,7 @@ SCHEDULER_KWARGS = {
 
 def train(  # noqa: C901
     wf,
+    molecules=None,
     workdir=None,
     save_every=None,
     state=None,
@@ -104,6 +105,7 @@ def train(  # noqa: C901
         sampler_kwargs (dict): arguments passed to
             :class:`~deepqmc.sampling.LangevinSampler`
     """
+    molecules = molecules or {'wf.mol': wf.mol}
     if 'optimizer_factory' in PLUGINS:
         log.info('Using a plugin for optimizer_factory')
         opt = PLUGINS['optimizer_factory'](wf.parameters())
@@ -165,37 +167,54 @@ def train(  # noqa: C901
         )
     else:
         init_step = 0
-        monitor = EWMMonitor(blowup_thre=blowup_threshold)
+        monitors = {
+            name: EWMMonitor(blowup_thre=blowup_threshold) for name in molecules
+        }
+    writers = {name: None for name in molecules}
+    log_dicts = {name: {} for name in molecules}
     if workdir:
         log.info(f'Will work in {workdir}')
         workdir = Path(workdir)
-        writer = SummaryWriter(log_dir=workdir, flush_secs=15, purge_step=init_step - 1)
-        writer.add_text(
-            'hyperparameters',
-            ''.join(f'**{key}** = {val}  \n' for key, val in locals().items()),
-        )
         chkpts_dir = workdir / 'chkpts'
         chkpts_dir.mkdir(exist_ok=True)
         h5file = h5py.File(workdir / 'fit.h5', 'a', libver='v110')
         h5file.swmr_mode = True
-        table = H5LogTable(h5file)
-        table.resize(init_step)
+        tables = {}
+        for name, molecule in molecules.items():
+            writers[name] = SummaryWriter(
+                log_dir=f'{workdir}/{name}', flush_secs=15, purge_step=init_step - 1
+            )
+            group = h5file.require_group(f'{name}')
+            group.attrs.create('geometry', molecule.coords.tolist())
+            table = H5LogTable(group)
+            table.resize(init_step)
+            tables[name] = table
         h5file.flush()
-    else:
-        writer = None
-        log_dict = {}
     if 'sampler_factory' in PLUGINS:
         log.info('Using a plugin for sampler_factory')
-        sampler = PLUGINS['sampler_factory'](wf, writer=writer)
+        samplers = {
+            name: PLUGINS['sampler_factory'](wf, mol=mol, writer=writer)
+            for (name, mol), writer in zip(molecules.items(), writers.values())
+        }
     else:
-        log.info(f'Using LangevinSampler, params = {sampler_kwargs!r}')
-        sampler = LangevinSampler.from_wf(wf, writer=writer, **(sampler_kwargs or {}))
+        log.info(f'Using LangevinSampler, params = {sampler_kwargs}')
+        samplers = {
+            name: LangevinSampler.from_wf(
+                wf, mol=mol, writer=writer, **(sampler_kwargs or {})
+            )
+            for (name, mol), writer in zip(molecules.items(), writers.values())
+        }
     if equilibrate:
         log.info('Equilibrating...')
-        with tqdm(count(), desc='equilibrating', disable=None) as steps:
-            next(
-                sample_wf(wf, sampler.iter_with_info(), steps, equilibrate=equilibrate)
-            )
+        for name, sampler in samplers.items():
+            with tqdm(
+                count(), desc=f'equilibrating sampler {name}', disable=None
+            ) as steps:
+                next(
+                    sample_wf(
+                        wf, sampler, steps, equilibrate=equilibrate
+                    )
+                )
         log.info('Equilibrated')
     log.info('Initializing training')
     steps = trange(
@@ -209,43 +228,65 @@ def train(  # noqa: C901
     chkpts = chkpts if chkpts is not None else []
     last_log = 0
     try:
-        for step, _ in fit_wf(
-            wf,
-            LossEnergy(),
-            opt,
-            sampler.iter_batches(
-                batch_size=batch_size,
-                epoch_size=epoch_size,
-                range=partial(trange, desc='sampling', leave=False, disable=None),
-            ),
-            steps,
-            log_dict=table.row if workdir else log_dict,
-            writer=writer,
-            **(fit_kwargs or {}),
+        for (step, _), *_ in zip(
+            *(
+                fit_wf(
+                    wf,
+                    LossEnergy(),
+                    opt,
+                    sampler.iter_batches(
+                        batch_size=batch_size,
+                        epoch_size=epoch_size,
+                        range=partial(
+                            trange, desc='sampling', leave=False, disable=None
+                        ),
+                    ),
+                    steps,
+                    **{
+                        **(fit_kwargs or {}),
+                        'mol': mol,
+                        'writer': writer,
+                        'log_dict': table.row if workdir else log_dict,
+                    },
+                )
+                for sampler, mol, writer, log_dict, table in zip(
+                    samplers.values(),
+                    molecules.values(),
+                    writers.values(),
+                    log_dicts.values(),
+                    tables.values(),
+                )
+            )
         ):
             # at this point, the wf model and optimizer are already at state step+1
-            monitor.update(table['E_loc'][-1] if workdir else log_dict['E_loc'])
-            if monitor.blowup.get('step') == monitor.step - 1:
-                log.info(f'Detected EWM outlier in step {step}')
-            # now monitor is at state `step+1`. if blowup was detected, the
-            # blowup is reported to occur at step `step`.
-            if monitor.blowup.get('in_blowup'):
-                if raise_blowup:
-                    raise TrainingBlowup(repr(monitor.blowup))
-                else:
-                    log.warning(f'Detected training blowup in step {step}')
-            energy = monitor.mean_of('mean_slow')
-            if energy.std_dev > 0:
-                steps.set_postfix(E=f'{energy:S}')
+            for name, monitor in monitors.items():
+                monitor.update(
+                    tables[name]['E_loc'][-1] if workdir else log_dicts[name]['E_loc']
+                )
+                if monitor.blowup.get('step') == monitor.step - 1:
+                    log.info(f'Detected EWM outlier in step {step}')
+                # now monitor is at state `step+1`. if blowup was detected, the
+                # blowup is reported to occur at step `step`.
+                if monitor.blowup.get('in_blowup'):
+                    if raise_blowup:
+                        raise TrainingBlowup(repr(monitor.blowup))
+                    else:
+                        log.warning(f'Detected training blowup in step {step}')
+            energies = {
+                name: monitor.mean_of('mean_slow') for name,monitor in monitors.items()
+            }
+            if all(energy.std_dev > 0 for energy in energies.values()):
+                energies_rep = '|'.join([f'{energy:S}' for energy in energies.values()])
+                steps.set_postfix(E=f'{energies_rep}')
                 now = time.time()
                 if (now - last_log) > 60:
-                    log.info(f'Progress: {step + 1}/{n_steps}, energy = {energy:S}')
+                    log.info(f'Progress: {step + 1}/{n_steps}, energy = {energies_rep}')
                     last_log = now
             state = {
                 'step': step + 1,
                 'wf': wf.state_dict(),
                 'opt': opt.state_dict(),
-                'monitor': deepcopy(monitor),
+                'monitoris': deepcopy(monitors),
             }
             if scheduler:
                 scheduler.step()
@@ -253,7 +294,8 @@ def train(  # noqa: C901
             chkpts.append((step + 1, state))
             chkpts = chkpts[-100:]
             if workdir:
-                table.row['E_ewm'] = energy.n
+                for table, energy in zip(tables.values(), energies.values()):
+                    table.row['E_ewm'] = energy.n
                 h5file.flush()
                 if save_every and (step + 1) % save_every == 0:
                     state_file = chkpts_dir / f'state-{step + 1:05d}.pt'
@@ -294,5 +336,6 @@ def train(  # noqa: C901
     finally:
         steps.close()
         if workdir:
-            writer.close()
+            for writer in writers.values():
+                writer.close()
             h5file.close()
