@@ -53,8 +53,8 @@ def electronic_potential(rs):
     return (1 / dists).sum(dim=-1)
 
 
-def quantum_force(rs, wf):
-    forces, psis = grad(rs, wf)
+def quantum_force(rs, wf, coords=None):
+    forces, psis = grad(rs, lambda rs: wf(rs, coords=coords))
     if torch.isnan(psis[0]).any():
         raise NanError(rs)
     if torch.isnan(forces).any():
@@ -109,7 +109,11 @@ def local_energy(
     Vs_nuc = nuclear_potential(rs, mol)
     Vs_el = electronic_potential(rs)
     lap_log_psis, (log_psis, sign_psis), quantum_force = laplacian(
-        rs, wf, create_graph=create_graph, keep_graph=keep_graph, return_grad=True
+        rs,
+        lambda rs: wf(rs, coords=mol.coords),
+        create_graph=create_graph,
+        keep_graph=keep_graph,
+        return_grad=True,
     )
     if torch.isnan(log_psis).any():
         raise NanError(rs)
