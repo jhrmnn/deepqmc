@@ -74,6 +74,7 @@ def fit_wf(  # noqa: C901
     opt,
     sampler,
     steps,
+    mol=None,
     writer=None,
     log_dict=None,
     require_energy_gradient=False,
@@ -146,6 +147,7 @@ def fit_wf(  # noqa: C901
                 Es_loc, log_psis, sign_psis = local_energy(
                     rs,
                     wf.sample(False),
+                    mol=mol,
                     create_graph=require_energy_gradient,
                     keep_graph=require_psi_gradient,
                 )
