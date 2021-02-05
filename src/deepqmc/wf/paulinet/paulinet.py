@@ -345,11 +345,11 @@ class PauliNet(WaveFunction):
             xs = xs + 0.1 * envel * torch.tanh(fs_add / 4)
         return xs
 
-    def forward(self, rs):  # noqa: C901
+    def forward(self, rs, coords=None):  # noqa: C901
         batch_dim, n_elec = rs.shape[:2]
         assert n_elec == self.confs.shape[1]
         n_atoms = len(self.mol)
-        coords = self.mol.coords
+        coords = self.mol.coords if coords is None else coords
         diffs_nuc = pairwise_diffs(torch.cat([coords, rs.flatten(end_dim=1)]), coords)
         dists_elec = pairwise_distance(rs, rs)
         if self.omni:
