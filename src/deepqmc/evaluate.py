@@ -4,7 +4,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm, trange
 from uncertainties import unumpy as unp
 
 from .sampling import LangevinSampler, sample_wf
@@ -16,9 +16,10 @@ __all__ = ['evaluate']
 
 def evaluate(
     wf,
+    molecules=None,
     store_steps=False,
     workdir=None,
-    log_dict=None,
+    log_dicts=None,
     *,
     n_steps=500,
     sample_size=1_000,
@@ -48,56 +49,83 @@ def evaluate(
     Returns:
         dict: Expectation values with standard errors.
     """
+    molecules = molecules or {'wf.mol': wf.mol}
+    log_dicts = log_dicts or {name: None for name in molecules}
+    tables_blocks = {name: None for name in molecules}
+    tables_steps = {name: None for name in molecules}
+    writers = {name: None for name in molecules}
     if workdir:
         workdir = Path(workdir)
-        writer = SummaryWriter(log_dir=workdir, flush_secs=15)
         h5file = h5py.File(workdir / 'sample.h5', 'a', libver='v110')
         h5file.swmr_mode = True
-        table_blocks = H5LogTable(h5file.require_group('blocks'))
-        table_steps = H5LogTable(h5file.require_group('steps'))
-    else:
-        writer = None
-    sampler = LangevinSampler.from_wf(
-        wf,
-        sample_size=sample_size,
-        writer=writer,
-        n_discard=0,
-        **{'n_decorrelate': 4, **(sampler_kwargs or {})},
-    )
-    steps = tqdm(count(), desc='equilibrating', disable=None)
+        for name, molecule in molecules.items():
+            writers[name] = SummaryWriter(log_dir=f'{workdir}/{name}', flush_secs=15)
+            group = h5file.require_group(f'{name}')
+            group.attrs.create('geometry', molecule.coords.tolist())
+            tables_blocks[name] = H5LogTable(group.require_group('blocks'))
+            if store_steps:
+                tables_steps[name] = H5LogTable(group.require_group('steps'))
+    samplers = {
+        name: LangevinSampler.from_wf(
+            wf,
+            mol=mol,
+            sample_size=sample_size,
+            writer=writer,
+            n_discard=0,
+            **{'n_decorrelate': 4, **(sampler_kwargs or {})},
+        )
+        for (name, mol), writer in zip(molecules.items(), writers.values())
+    }
+    for name, sampler in samplers.items():
+        with tqdm(count(), desc=f'equilibrating sampler {name}', disable=None) as steps:
+            next(sample_wf(wf, sampler, steps, equilibrate=True))
+    steps = trange(0, n_steps, total=n_steps, desc='evaluating', disable=None)
     blocks = []
     try:
-        for step, energy in sample_wf(
-            wf,
-            sampler.iter_with_info(),
-            steps,
-            blocks=blocks,
-            log_dict=log_dict
-            if log_dict is not None
-            else table_steps.row
-            if workdir and store_steps
-            else None,
-            writer=writer,
-            **(sample_kwargs or {}),
-        ):
-            if energy == 'eq':
-                steps.total = step + n_steps
-                steps.set_description('evaluating')
-                continue
-            if energy is not None:
-                steps.set_postfix(E=f'{energy:S}')
-            if workdir:
-                if len(blocks) > len(table_blocks['energy']):
-                    block = blocks[-1]
-                    table_blocks.row['energy'] = np.stack(
-                        [unp.nominal_values(block), unp.std_devs(block)], -1
+        for ((step, *_), energies) in map(
+            lambda x: zip(*x),
+            zip(
+                *(
+                    sample_wf(
+                        wf,
+                        sampler,
+                        steps,
+                        blocks=blocks,
+                        log_dict=log_dict
+                        if log_dict is not None
+                        else table_steps.row
+                        if workdir and store_steps
+                        else None,
+                        writer=writer,
+                        equilibrate=False,
+                        **(sample_kwargs or {}),
                     )
+                    for (sampler, writer, log_dict, table_steps) in zip(
+                        samplers.values(),
+                        writers.values(),
+                        log_dicts.values(),
+                        tables_steps.values(),
+                    )
+                )
+            ),
+        ):
+            if step == 0:
+                continue
+            if all(energies):
+                energies_rep = '|'.join([f'{energy:S}' for energy in energies])
+                steps.set_postfix(E=f'{energies_rep}')
+            if workdir:
+                for table_blocks in tables_blocks.values():
+                    if len(blocks) > len(table_blocks['energy']):
+                        block = blocks[-1]
+                        table_blocks.row['energy'] = np.stack(
+                            [unp.nominal_values(block), unp.std_devs(block)], -1
+                        )
                 h5file.flush()
-            if step >= (steps.total or n_steps) - 1:
-                break
     finally:
         steps.close()
         if workdir:
-            writer.close()
+            for writer in writers.values():
+                writer.close()
             h5file.close()
-    return {'energy': energy}
+    return {f'energy {name}': energy for name, energy in zip(molecules, energies)}
