@@ -129,6 +129,11 @@ class NestedDict(dict):
             else:
                 super().__setitem__(key, val)
 
+    def as_dict(self):
+        return {
+            k: v.as_dict() if isinstance(v, NestedDict) else v for k, v in self.items()
+        }
+
 
 class DebugLogTable:
     def __init__(self):
