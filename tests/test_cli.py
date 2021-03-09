@@ -1,11 +1,11 @@
 import os
 
 import pytest
-import toml
+import yaml
 from click.testing import CliRunner
 
 from deepqmc.cli import cli
-from deepqmc.errors import TomlError
+from deepqmc.errors import InputError
 
 PARAM_H2 = {
     'system': 'H2',
@@ -20,13 +20,13 @@ runner = CliRunner()
 def test_defaults():
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ['defaults'], catch_exceptions=False)
-    assert toml.loads(result.output)
+    assert yaml.safe_load(result.output)
 
 
 def test_train():
     with runner.isolated_filesystem():
-        with open('param.toml', 'w') as f:
-            toml.dump(PARAM_H2, f)
+        with open('param.yaml', 'w') as f:
+            yaml.dump(PARAM_H2, f)
         result = runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
         files = os.listdir()
     assert 'fit.h5' in files
@@ -38,8 +38,8 @@ def test_train():
 
 def test_pyscf_reload():
     with runner.isolated_filesystem():
-        with open('param.toml', 'w') as f:
-            toml.dump({**PARAM_H2, 'paulinet_kwargs': {'cas': [2, 2]}}, f)
+        with open('param.yaml', 'w') as f:
+            yaml.dump({**PARAM_H2, 'paulinet_kwargs': {'cas': [2, 2]}}, f)
         result = runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
         result_repeated = runner.invoke(
             cli, ['train', '.', '--no-cuda'], catch_exceptions=False
@@ -50,8 +50,8 @@ def test_pyscf_reload():
 
 def test_evaluate():
     with runner.isolated_filesystem():
-        with open('param.toml', 'w') as f:
-            toml.dump(PARAM_H2, f)
+        with open('param.yaml', 'w') as f:
+            yaml.dump(PARAM_H2, f)
         result = runner.invoke(
             cli, ['evaluate', '.', '--no-cuda'], catch_exceptions=False
         )
@@ -64,11 +64,11 @@ def test_evaluate():
 
 def test_validity_check():
     with runner.isolated_filesystem():
-        with open('param.toml', 'w'):
+        with open('param.yaml', 'w'):
             pass
-        with pytest.raises(TomlError):
+        with pytest.raises(InputError):
             runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)
-        with open('param.toml', 'w') as f:
-            toml.dump({**PARAM_H2, 'foo': 'bar'}, f)
-        with pytest.raises(TomlError):
+        with open('param.yaml', 'w') as f:
+            yaml.dump({**PARAM_H2, 'foo': 'bar'}, f)
+        with pytest.raises(InputError):
             runner.invoke(cli, ['train', '.', '--no-cuda'], catch_exceptions=False)

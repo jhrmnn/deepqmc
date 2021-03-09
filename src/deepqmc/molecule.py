@@ -2,8 +2,8 @@ from copy import deepcopy
 from importlib import resources
 
 import numpy as np
-import toml
 import torch
+import yaml
 from torch import nn
 
 __version__ = '0.1.0'
@@ -11,7 +11,7 @@ __all__ = ['Molecule']
 
 angstrom = 1 / 0.52917721092
 
-_SYSTEMS = toml.loads(resources.read_text('deepqmc.data', 'systems.toml'))
+_SYSTEMS = yaml.safe_load(resources.read_text('deepqmc.data', 'systems.yaml'))
 _SYSTEM_FACTORIES = {
     'Hn': lambda n, dist: {
         'coords': np.hstack(

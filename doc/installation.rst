@@ -15,7 +15,7 @@ These packages will be installed automatically when installing DeepQMC.
 
 - `NumPy <https://numpy.org>`_ is an essential library for numerical computation in Python.
 - `PyTorch <https://pytorch.org>`_ is one of the most popular Python frameworks for deep learning.
-- `TOML <https://github.com/uiri/toml>`_ implements the `TOML <https://en.wikipedia.org/wiki/TOML>`__ configuration file format in Python.
+- `PyYAML <https://pyyaml.org>`_ is used to read `YAML <https://yaml.org>`__ files.
 - `uncertainties <http://uncertainties-python-package.readthedocs.io>`_ helps with propagation of uncertainties in calculations.
 
 Optional dependencies
@@ -30,7 +30,6 @@ The following dependencies are required only by non-essential parts of DeepQMC a
 - `TQDM <https://github.com/tqdm/tqdm>`_ provides progress bars.
 - `h5py <https://www.h5py.org>`_ handles IO for `HDF5 <http://hdfgroup.org>`_ files.
 - `Click <https://click.palletsprojects.com>`_ helps with constructing command-line interfaces.
-- `TOML Kit <https://github.com/sdispater/tomlkit>`_ supports advanced TOML file manipulations.
 
 Virtual environments
 --------------------

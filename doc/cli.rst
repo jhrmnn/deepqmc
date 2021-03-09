@@ -30,11 +30,11 @@ The usage of all the commands can be obtained with::
 Example
 -------
 
-Create a working directory with the ``param.toml`` file, which specifies all calculation hyperparameters, see :ref:`below <hyperparameters>` for details::
+Create a working directory with the ``param.yaml`` file, which specifies all calculation hyperparameters, see :ref:`below <hyperparameters>` for details::
 
-    $ cat lih/param.toml
-    system = 'LiH'
-    ansatz = 'paulinet'
+    $ cat lih/param.yaml
+    system: LiH
+    ansatz: paulinet
 
 Train the wave function ansatz::
 
@@ -65,7 +65,7 @@ Similar to the ``train`` command, this creates a ``sample.h5`` file with the sam
 Hyperparameters
 ---------------
 
-The CLI supports specification of hyperparameters via the ``param.toml`` file, placed in ``WORKDIR``, which is passed to the individual commands. The structure of this file is derived from the :ref:`api`. All hyperparameters and their default values can be printed in the TOML format with the ``defaults`` command. For convenience, they are reproduced here:
+The CLI supports specification of hyperparameters via the ``param.yaml`` file, placed in ``WORKDIR``, which is passed to the individual commands. The structure of this file is derived from the :ref:`api`. All hyperparameters and their default values can be printed in the YAML format with the ``defaults`` command. For convenience, they are reproduced here:
 
-.. literalinclude:: defaults.toml
-   :language: toml
+.. literalinclude:: defaults.yaml
+   :language: yaml

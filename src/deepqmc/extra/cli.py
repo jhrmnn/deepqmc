@@ -96,8 +96,8 @@ def train_multi_at(  # noqa: C901
             now = time.time()
             root = workdir.parents[multi_part]
             stem = ('*',) + workdir.parts[::-1][:multi_part]
-            root.glob('/'.join(stem + ('param.toml',)))
-            n_tasks = len(list(root.glob('/'.join(stem + ('param.toml',)))))
+            root.glob('/'.join(stem + ('param.yaml',)))
+            n_tasks = len(list(root.glob('/'.join(stem + ('param.yaml',)))))
             all_states = {
                 int(p.parts[-3 - multi_part]): p
                 for p in root.glob(

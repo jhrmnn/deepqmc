@@ -4,8 +4,7 @@ import sys
 from pathlib import Path
 
 import click
-import tomlkit
-from tomlkit.items import Comment, Trivia
+import yaml
 from tqdm import tqdm
 
 from .errors import TrainingCrash
@@ -51,34 +50,27 @@ def _get_subkwargs(func, name, mapping):
 
 
 def collect_kwarg_defaults(func, mapping):
-    kwargs = tomlkit.table()
+    kwargs = {}
     for p in inspect.signature(func).parameters.values():
         if p.name == 'kwargs':
             assert p.default is p.empty
             assert p.kind is inspect.Parameter.VAR_KEYWORD
-            sub_kwargs = _get_subkwargs(func, 'kwargs', mapping)
-            for item in sub_kwargs.value.body:
-                kwargs.add(*item)
+            kwargs.update(_get_subkwargs(func, 'kwargs', mapping))
         elif p.name.endswith('_kwargs'):
             if mapping.get((func, p.name)) is True:
                 kwargs[p.name] = p.default
             else:
                 assert p.default is None
                 assert p.kind is inspect.Parameter.KEYWORD_ONLY
-                sub_kwargs = _get_subkwargs(func, p.name, mapping)
-                kwargs[p.name] = sub_kwargs
+                kwargs[p.name] = _get_subkwargs(func, p.name, mapping)
         elif p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD:
             assert p.default in (p.empty, p.default)
         else:
             assert p.kind is inspect.Parameter.KEYWORD_ONLY
-            if p.default is None:
-                kwargs.add(Comment(Trivia(comment=f'#: {p.name} = ...')))
-            else:
-                try:
-                    kwargs[p.name] = p.default
-                except ValueError:
-                    print(func, p.name, p.kind, p.default)
-                    raise
+            default = p.default
+            if default is p.empty:
+                default = mapping[func, p.name]
+            kwargs[p.name] = default
     return kwargs
 
 
@@ -129,15 +121,15 @@ def cli(verbose, quiet):  # noqa: D403
 def defaults(commented):
     """Print all hyperparameters and their default values.
 
-    The hyperparameters are printed in the TOML format that is expected by other
+    The hyperparameters are printed in the YAML format that is expected by other
     deepqmc commands.
     """
-    table = tomlkit.table()
+    table = {}
     table['train_kwargs'] = collect_kwarg_defaults(train, DEEPQMC_DEFAULTS)
     table['evaluate_kwargs'] = collect_kwarg_defaults(evaluate, DEEPQMC_DEFAULTS)
     for label, ansatz in ANSATZES.items():
         table[f'{label}_kwargs'] = collect_kwarg_defaults(ansatz.entry, ansatz.defaults)
-    lines = tomlkit.dumps(table).split('\n')
+    lines = yaml.dump(table).split('\n')
     if commented:
         lines = ['# ' + l if ' = ' in l and l[0] != '#' else l for l in lines]
     click.echo('\n'.join(lines), nl=False)
@@ -167,7 +159,7 @@ def defaults(commented):
 def train_at(workdir, save_every, cuda, max_restarts, hook):
     """Train an ansatz with variational quantum Monte Carlo.
 
-    The calculation details must be specified in a "param.toml" file in WORKDIR,
+    The calculation details must be specified in a "param.yaml" file in WORKDIR,
     which must contain at least the keywords "system" and "ansatz", and
     optionally any keywords printed by the "defaults" command.
     """
@@ -225,7 +217,7 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
 def evaluate_at(workdir, cuda, store_steps, hook):
     """Estimate total energy of an ansatz via Monte Carlo sampling.
 
-    The calculation details must be specified in a "param.toml" file in WORKDIR,
+    The calculation details must be specified in a "param.yaml" file in WORKDIR,
     which must contain at least the keywords "system" and "ansatz", and
     optionally any keywords printed by the "defaults" command. The wave function
     ansatz must be stored in a "state.pt" file in WORKDIR, which was generated

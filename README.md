@@ -38,9 +38,9 @@ evaluate(net)
 Or on the command line:
 
 ```
-$ cat lih/param.toml
-system = 'LiH'
-ansatz = 'paulinet'
+$ cat lih/param.yaml
+system: LiH
+ansatz: paulinet
 [train_kwargs]
 n_steps = 40
 $ deepqmc train lih --save-every 20
