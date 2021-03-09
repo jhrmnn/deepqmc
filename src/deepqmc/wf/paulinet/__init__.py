@@ -1,5 +1,5 @@
 from .cusp import CuspCorrection, ElectronicAsymptotic
-from .distbasis import DistanceBasis
+from .distbasis import DistanceBasisGaussian
 from .gto import GTOBasis, GTOShell
 from .molorb import MolecularOrbital
 from .omni import Backflow, Jastrow, OmniSchNet
@@ -13,7 +13,7 @@ __all__ = [
     'Backflow',
     'ElectronicSchNet',
     'SubnetFactory',
-    'DistanceBasis',
+    'DistanceBasisGaussian',
     'CuspCorrection',
     'ElectronicAsymptotic',
     'MolecularOrbital',
