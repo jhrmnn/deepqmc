@@ -1,12 +1,14 @@
+from math import pi
+
 import torch
 from torch import nn
 
 __version__ = '0.1.0'
-__all__ = ['DistanceBasis']
+__all__ = ['DistanceBasisGaussian', 'DistanceBasisSine']
 
 
-class DistanceBasis(nn.Module):
-    r"""Expands distances in distance feature basis.
+class DistanceBasisGaussian(nn.Module):
+    r"""Expands distances in Gaussian basis functions.
 
     Maps distances, *d*, to distance features, :math:`\mathbf e(d)`.
 
@@ -60,5 +62,41 @@ class DistanceBasis(nn.Module):
                 ('dist_feat_dim', len(self.mus)),
                 ('cutoff', self.cutoff),
                 ('envelope', self.envelope),
+            ]
+        )
+
+
+class DistanceBasisSine(nn.Module):
+    r"""Expands distances in sine basis functions.
+
+    Maps distances, *d*, to distance features, :math:`\mathbf e(d)`.
+
+    Args:
+        dist_feat_dim (int): :math:`\dim(\mathbf e)`, number of features
+        cutoff (float, .a.u.): distance at which all features go to zero
+    Shape:
+        - Input, *d*: :math:`(*)`
+        - Output, :math:`\mathbf e(d)`: :math:`(*,\dim(\mathbf e))`
+    """
+
+    def __init__(self, dist_feat_dim, cutoff=10.0):
+        super().__init__()
+        self.cutoff = cutoff
+        self.dist_feat_dim = dist_feat_dim
+
+    def forward(self, dists):
+        dists_rel = dists / self.cutoff
+        envelope = torch.where(
+            dists_rel > 1, dists.new_zeros(1), torch.cos(pi * dists_rel / 2) ** 2
+        )
+        n = torch.arange(1, self.dist_feat_dim + 1, device=dists.device)
+        return (envelope / dists)[..., None] * torch.sin(n * pi * dists_rel[..., None])
+
+    def extra_repr(self):
+        return ', '.join(
+            f'{lbl}={val!r}'
+            for lbl, val in [
+                ('dist_feat_dim', self.dist_feat_dim),
+                ('cutoff', self.cutoff),
             ]
         )

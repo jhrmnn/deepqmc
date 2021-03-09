@@ -7,7 +7,7 @@ from deepqmc.fit import LossEnergy, fit_wf
 from deepqmc.physics import local_energy
 from deepqmc.sampling import LangevinSampler
 from deepqmc.wf import ANSATZES
-from deepqmc.wf.paulinet.distbasis import DistanceBasis
+from deepqmc.wf.paulinet.distbasis import DistanceBasisGaussian
 from deepqmc.wf.paulinet.schnet import ElectronicSchNet
 
 
@@ -32,7 +32,7 @@ def mol():
 class OmniNet(nn.Module):
     def __init__(self, n_atoms, n_up, n_down, n_orbitals, n_backflows):
         super().__init__()
-        self.dist_basis = DistanceBasis(4, envelope='nocusp')
+        self.dist_basis = DistanceBasisGaussian(4, envelope='nocusp')
         self.schnet = ElectronicSchNet(
             n_up,
             n_down,

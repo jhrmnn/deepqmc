@@ -5,7 +5,7 @@ from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn, idx_perm
 
-from .distbasis import DistanceBasis
+from .distbasis import DistanceBasisGaussian, DistanceBasisSine
 
 __version__ = '0.2.0'
 __all__ = ['ElectronicSchNet']
@@ -217,6 +217,7 @@ class ElectronicSchNet(nn.Module):
         dist_feat_dim=32,
         dist_feat_cutoff=10.0,
         n_interactions=3,
+        basis_type='gaussian',
         kernel_dim=64,
         version=2,
         layer_norm=False,
@@ -225,9 +226,12 @@ class ElectronicSchNet(nn.Module):
         subnet_metafactory = subnet_metafactory or SubnetFactory
         subnet_factory = subnet_metafactory(dist_feat_dim, kernel_dim, embedding_dim)
         super().__init__()
-        self.dist_basis = DistanceBasis(
-            dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
-        )
+        if basis_type == 'gaussian':
+            self.dist_basis = DistanceBasisGaussian(
+                dist_feat_dim, cutoff=dist_feat_cutoff, envelope='nocusp'
+            )
+        elif basis_type == 'sine':
+            self.dist_basis = DistanceBasisSine(dist_feat_dim, cutoff=dist_feat_cutoff)
         self.Y = nn.Embedding(n_nuclei, kernel_dim)
         self.X = nn.Embedding(1 if n_up == n_down else 2, embedding_dim)
         self.layers = nn.ModuleList(
