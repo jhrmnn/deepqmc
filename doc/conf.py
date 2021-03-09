@@ -69,6 +69,7 @@ autodoc_mock_imports = [
     'torch',
     'tqdm',
     'uncertainties',
+    'yaml',
 ]
 todo_include_todos = True
 napoleon_numpy_docstring = False

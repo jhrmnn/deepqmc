@@ -1,10 +1,10 @@
 import importlib
 import logging
 
-import toml
 import torch
+import yaml
 
-from .errors import TomlError
+from .errors import InputError
 from .molecule import Molecule
 from .wf import ANSATZES
 
@@ -16,13 +16,13 @@ __all__ = ()
 def validate_params(params):
     REQUIRED = {'system', 'ansatz'}
     OPTIONAL = {'train_kwargs', 'evaluate_kwargs'} | {f'{a}_kwargs' for a in ANSATZES}
-    params = set(params)
+    params = set(params or [])
     missing = REQUIRED - params
     if missing:
-        raise TomlError(f'Missing keywords: {missing}')
+        raise InputError(f'Missing keywords: {missing}')
     unknown = params - REQUIRED - OPTIONAL
     if unknown:
-        raise TomlError(f'Unknown keywords: {unknown}')
+        raise InputError(f'Unknown keywords: {unknown}')
 
 
 def import_fullname(fullname):
@@ -32,7 +32,19 @@ def import_fullname(fullname):
 
 
 def wf_from_file(workdir):
-    params = toml.loads((workdir / 'param.toml').read_text())
+    try:
+        params = yaml.safe_load((workdir / 'param.yaml').read_text())
+    except FileNotFoundError as e:
+        import toml
+
+        try:
+            params = toml.loads((workdir / 'param.toml').read_text())
+        except FileNotFoundError:
+            raise e from None
+        else:
+            import warnings
+
+            warnings.warn('TOML input files will be deprecated', FutureWarning)
     validate_params(params)
     state_file = workdir / 'state.pt'
     state = torch.load(state_file) if state_file.is_file() else None

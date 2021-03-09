@@ -1,0 +1,123 @@
+evaluate_kwargs:
+  n_steps: 500
+  sample_kwargs:
+    block_size: 10
+    equilibrate: true
+  sample_size: 1000
+  sampler_kwargs:
+    log_psi_threshold: null
+    max_age: null
+    n_decorrelate: 4
+    n_first_certain: 3
+    target_acceptance: 0.57
+    tau: 0.1
+paulinet_kwargs:
+  backflow_channels: 1
+  backflow_transform: mult
+  backflow_type: orbital
+  basis: 6-311g
+  cas: null
+  conf_cutoff: 0.01
+  conf_limit: null
+  cusp_alpha: 10.0
+  cusp_correction: true
+  cusp_electrons: true
+  freeze_confs: false
+  freeze_embed: false
+  freeze_mos: true
+  init_weights: true
+  omni_factory: omni_schnet
+  omni_kwargs:
+    omni_schnet:
+      backflow: many-body
+      backflow_kwargs:
+        n_layers: 3
+      jastrow: many-body
+      jastrow_kwargs:
+        n_layers: 3
+        sum_first: true
+      mb_embedding_dim: 128
+      mf_embedding_dim: 128
+      mf_schnet_kwargs:
+        basis_type: gaussian
+        dist_feat_cutoff: 10.0
+        dist_feat_dim: 32
+        kernel_dim: 64
+        layer_norm: false
+        n_interactions: 3
+      mf_subnet_kwargs:
+        n_layers_g: 1
+        n_layers_h: 1
+        n_layers_w: 2
+      schnet_kwargs:
+        basis_type: gaussian
+        dist_feat_cutoff: 10.0
+        dist_feat_dim: 32
+        kernel_dim: 64
+        layer_norm: false
+        n_interactions: 3
+        version: 2
+      subnet_kwargs:
+        n_layers_g: 1
+        n_layers_h: 1
+        n_layers_w: 2
+  rc_scaling: 1.0
+  workdir: null
+train_kwargs:
+  batch_size: 10000
+  epoch_size: 100
+  equilibrate: true
+  fit_kwargs:
+    clip_outliers: true
+    max_grad_norm: null
+    q: 5
+  kfac_kwargs:
+    average_loc: false
+    centered_cov: false
+    cov_ema_decay: 0.95
+    damping: null
+    exact_norm: false
+    lr: null
+    max_pi: 1000.0
+    norm_constraint: null
+  learning_rate: 0.01
+  lr_scheduler: CyclicLR
+  lr_scheduler_kwargs:
+    CyclicLR:
+      base_lr: 0.0001
+      cycle_momentum: false
+      max_lr: 0.01
+      mode: triangular2
+      step_size_up: 250
+    OneCycleLR:
+      anneal_strategy: linear
+      max_lr: 0.005
+      pct_start: 0.075
+      total_steps: 5000
+    inverse:
+      decay_rate: 200
+    scan:
+      eq_steps: 100
+      rate: 1.05
+      start: 0.1
+  n_steps: 10000
+  optimizer: AdamW
+  optimizer_kwargs:
+    Adam:
+      betas:
+      - 0.9
+      - 0.9
+    AdamW:
+      betas:
+      - 0.9
+      - 0.9
+      weight_decay: 0.01
+  sampler_kwargs:
+    log_psi_threshold: null
+    max_age: null
+    n_decorrelate: 1
+    n_discard: 50
+    n_first_certain: 3
+    sample_size: 2000
+    target_acceptance: 0.57
+    tau: 0.1
