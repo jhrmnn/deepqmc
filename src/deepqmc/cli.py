@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import click
+import torch
 import yaml
 from tqdm import tqdm
 
@@ -98,7 +99,8 @@ class CLI(click.Group):
 @click.group(cls=CLI)
 @click.option('-v', '--verbose', count=True, help='Increase verbosity.')
 @click.option('-q', '--quiet', is_flag=True, help='Suppres all output.')
-def cli(verbose, quiet):  # noqa: D403
+@click.option('-s', '--seed', default=0, help='Manual seed for Pytorch.')
+def cli(verbose, quiet, seed):  # noqa: D403
     """DeepQMC runs quantum Monte Carlo with deep neural networks."""
     assert not (quiet and verbose)
     logging.basicConfig(
@@ -111,6 +113,8 @@ def cli(verbose, quiet):  # noqa: D403
         level = logging.ERROR
     else:
         level = [logging.WARNING, logging.INFO, logging.DEBUG][verbose]
+    if seed:
+        torch.manual_seed(seed)
     logging.getLogger('deepqmc').setLevel(level)
 
 
