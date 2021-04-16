@@ -140,7 +140,7 @@ def defaults(commented):
 
 
 @cli.command('train')
-@click.argument('workdir', type=click.Path(exists=True))
+@click.argument('workdir', type=click.Path())
 @click.option(
     '--save-every',
     default=100,
@@ -160,7 +160,8 @@ def defaults(commented):
     help='Maximum number of attempted restarts before aborting.',
 )
 @click.option('--hook', is_flag=True, help='Import a deepqmc hook from WORKDIR.')
-def train_at(workdir, save_every, cuda, max_restarts, hook):
+@click.option('-p', '--parameter', multiple=True, help='Specify hyperparamter.')
+def train_at(workdir, save_every, cuda, max_restarts, hook, parameter):
     """Train an ansatz with variational quantum Monte Carlo.
 
     The calculation details must be specified in a "param.yaml" file in WORKDIR,
@@ -175,7 +176,7 @@ def train_at(workdir, save_every, cuda, max_restarts, hook):
     state = None
     for attempt in range(max_restarts + 1):
         log.info('Initializing a new wave function')
-        wf, params, state_from_file = wf_from_file(workdir)
+        wf, params, state_from_file = wf_from_file(workdir, extra_params=parameter)
         state = state or state_from_file
         if cuda:
             log.info('Moving to GPU...')

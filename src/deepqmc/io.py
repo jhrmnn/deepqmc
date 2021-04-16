@@ -5,6 +5,7 @@ import torch
 import yaml
 
 from .errors import InputError
+from .extra.debug import NestedDict
 from .molecule import Molecule
 from .wf import ANSATZES
 
@@ -31,20 +32,25 @@ def import_fullname(fullname):
     return getattr(module, qualname)
 
 
-def wf_from_file(workdir):
-    try:
-        params = yaml.safe_load((workdir / 'param.yaml').read_text())
-    except FileNotFoundError as e:
+def wf_from_file(workdir, extra_params=None):
+    params = (
+        yaml.safe_load((workdir / 'param.yaml').read_text())
+        if (workdir / 'param.yaml').exists()
+        else {}
+    )
+    if extra_params:
+        params = NestedDict(params)
+        for p in extra_params:
+            k, v = p.split('=', 1)
+            v = yaml.safe_load(v)
+            params[k] = v
+    if not params and (workdir / 'param.toml').exists():
+        import warnings
+
         import toml
 
-        try:
-            params = toml.loads((workdir / 'param.toml').read_text())
-        except FileNotFoundError:
-            raise e from None
-        else:
-            import warnings
-
-            warnings.warn('TOML input files will be deprecated', FutureWarning)
+        params = toml.loads((workdir / 'param.toml').read_text())
+        warnings.warn('TOML input files will be deprecated', FutureWarning)
     validate_params(params)
     state_file = workdir / 'state.pt'
     state = torch.load(state_file) if state_file.is_file() else None
@@ -67,5 +73,6 @@ def wf_from_file(workdir):
     if ansatz.uses_workdir:
         assert 'workdir' not in kwargs
         kwargs['workdir'] = workdir
+        workdir.mkdir(parents=True, exist_ok=True)
     wf = ansatz.entry(mol, **kwargs)
     return wf, params, state
