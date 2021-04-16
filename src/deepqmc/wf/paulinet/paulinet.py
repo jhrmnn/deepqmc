@@ -328,7 +328,7 @@ class PauliNet(WaveFunction):
             mf = self.mf
         except AttributeError:
             return super().pop_charges()
-        return mf.pop(verbose=0)[1]
+        return torch.from_numpy(mf.pop(verbose=0)[1]).to(self.confs.device)
 
     def _backflow_op(self, xs, fs):
         if self.backflow_transform == 'mult':
